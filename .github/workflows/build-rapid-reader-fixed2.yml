@@ -1,0 +1,54 @@
+name: Build Rapid Reader APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find and extract project ZIP
+        shell: bash
+        run: |
+          ZIP_FILE=$(find . -maxdepth 3 -type f -iname 'RapidReader-Android-Starter.zip' -print -quit)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "RapidReader-Android-Starter.zip not found. Upload it to the repository root."
+            exit 1
+          fi
+          unzip -q "$ZIP_FILE" -d extracted
+          PROJECT_DIR="extracted/rapid-reader"
+          if [ ! -f "$PROJECT_DIR/settings.gradle" ]; then
+            echo "Android project folder not found inside ZIP."
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Build debug APK
+        run: gradle -p "$PROJECT_DIR" assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RapidReader-debug-apk
+          path: extracted/rapid-reader/app/build/outputs/apk/debug/app-debug.apk
